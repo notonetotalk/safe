@@ -45,21 +45,21 @@ fn main() {
         let args: Vec<String> = env::args().collect();
         if args.len() > 1 {
             match args[1].as_str() {
-                "new" => {
+                "new" | "NEW" | "n" | "N" => {
                     if args.len() > 2 {
                         new_archive(&mut config, Some(&args[2]));
                     } else {
                         new_archive(&mut config, None);
                     }
                 }
-                "view" => {
+                "view" | "VIEW" | "v" | "V" => {
                     if args.len() > 2 {
                         unlock(&mut config, false, Some(&args[2]));
                     } else {
                         unlock(&mut config, false, None);
                     }
                 }
-                "open" => {
+                "open" | "OPEN" | "o" | "O" => {
                     if args.len() > 2 {
                         unlock(&mut config, true, Some(&args[2]));
                     } else {
@@ -76,7 +76,6 @@ fn main() {
                     println!("    name:    Name of the safe to create or open");
                 }
             }
-            end_line();
             exit = true;
         }
     }
@@ -86,25 +85,32 @@ fn main() {
             None => {
                 println!("\n    No safes found in the current directory.");
                 print!("    Create a new safe? (y/n): ");
-                io::stdout().flush().unwrap();
-                let mut choice = String::new();
-                match io::stdin().read_line(&mut choice) {
-                    Ok(_) => match choice.trim() {
-                        "y" | "Y" | "yes" | "YES" => new_archive(&mut config, None),
-                        _ => {
-                            end_line();
-                            exit = true;
+                match io::stdout().flush() {
+                    Ok(_) => {
+                        let mut choice = String::new();
+                        match io::stdin().read_line(&mut choice) {
+                            Ok(_) => match choice.trim() {
+                                "y" | "Y" | "yes" | "YES" => {
+                                    new_archive(&mut config, None);
+                                    exit = false;
+                                }
+                                _ => exit = true,
+                            },
+                            Err(_) => {
+                                println!("\n    Error reading input.");
+                                exit = true;
+                            }
                         }
-                    },
+                    }
                     Err(_) => {
-                        println!("\n    Error reading input.");
-                        end_line();
+                        println!("    Error when flushing standard output.");
                         exit = true;
                     }
                 }
             }
         }
     }
+    end_line();
 }
 
 fn path_exists(path: &str) -> bool {
@@ -163,7 +169,13 @@ fn menu(config: &mut Config) -> bool {
     println!("        open:    Open a safe where all changes will be saved");
     println!("        exit:    Exit program");
     print!("\n    Choose option: ");
-    io::stdout().flush().unwrap();
+    match io::stdout().flush() {
+        Ok(_) => (),
+        Err(_) => {
+            println!("    Error when flushing standard output.");
+            return true;
+        }
+    }
     let mut choice = String::new();
     match io::stdin().read_line(&mut choice) {
         Ok(_) => (),
@@ -173,11 +185,10 @@ fn menu(config: &mut Config) -> bool {
         }
     }
     match choice.trim() {
-        "new" => new_archive(config, None),
-        "view" => unlock(config, false, None),
-        "open" => unlock(config, true, None),
-        "exit" => {
-            end_line();
+        "new" | "NEW" | "n" | "N" => new_archive(config, None),
+        "view" | "VIEW" | "v" | "V" => unlock(config, false, None),
+        "open" | "OPEN" | "o" | "O" => unlock(config, true, None),
+        "exit" | "EXIT" | "e" | "E" => {
             return true;
         }
         _ => pause("\n    Invalid input. Press \"Enter\" to try again..."),
@@ -199,7 +210,13 @@ fn new_archive(config: &mut Config, name_arg: Option<&str>) {
         None => {
             let name = loop {
                 print!("\n    Set new safe name: ");
-                io::stdout().flush().unwrap();
+                match io::stdout().flush() {
+                    Ok(_) => (),
+                    Err(_) => {
+                        println!("    Error when flushing standard output.");
+                        return;
+                    }
+                }
 
                 // take user unput
                 let mut input = String::new();
@@ -503,7 +520,13 @@ fn unlock(config: &mut Config, keep: bool, selection_arg: Option<&str>) {
             }
             let mut input = String::new();
             print!("\n    Choose selection: ");
-            io::stdout().flush().unwrap();
+            match io::stdout().flush() {
+                Ok(_) => (),
+                Err(_) => {
+                    println!("    Error when flushing standard output.");
+                    return;
+                }
+            }
             match io::stdin().read_line(&mut input) {
                 Ok(_) => (),
                 Err(e) => {
@@ -606,7 +629,7 @@ fn unlock(config: &mut Config, keep: bool, selection_arg: Option<&str>) {
     match encrypted_ar.seek(SeekFrom::Start(122)) {
         Ok(_) => (),
         Err(_) => {
-            println!("\n    Error occured while accessing encrypted archive.");
+            println!("\n    Error occurred while accessing encrypted archive.");
             pause("    Press \"Enter\" to continue...");
         }
     }
@@ -700,14 +723,8 @@ fn unlock(config: &mut Config, keep: bool, selection_arg: Option<&str>) {
         }
     }
 
-    if keep == false {
-        println!("    Warning: Changes will not be saved.");
-        pause("    Safe contents have been copied. Press \"Enter\" to erase...");
-    } else {
-        pause("    Safe is now opened. Press \"Enter\" to close...");
-    }
-
     if keep {
+        pause("    Safe is now opened. Press \"Enter\" to relock...");
         // backup files into refreshed archive
         match lock(&opened_archive, &aes_key) {
             Ok(_) => (),
@@ -718,6 +735,8 @@ fn unlock(config: &mut Config, keep: bool, selection_arg: Option<&str>) {
             }
         }
     } else {
+        println!("    Warning: Changes will not be saved.");
+        pause("    Safe contents have been copied. Press \"Enter\" to erase...");
         // delete extracted files without an archive refresh
         match fs::remove_dir_all(&opened_archive.name) {
             Ok(_) => (),
